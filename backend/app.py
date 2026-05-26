@@ -1,6 +1,7 @@
 import os
 from flask import Flask, jsonify
 from backend.config import Config
+from backend.models import db, User
 
 def create_app():
     # Base dir is /backend, templates and static are in /frontend
@@ -12,9 +13,20 @@ def create_app():
     app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
     app.config.from_object(Config)
     
+    # Initialize DB
+    db.init_app(app)
+    
     @app.route('/ping', methods=['GET'])
     def ping():
         return jsonify({"message": "Placement Portal backend is running!", "status": "success"})
+        
+    @app.route('/test-db', methods=['GET'])
+    def test_db():
+        try:
+            admin_count = User.query.filter_by(role='admin').count()
+            return jsonify({"status": "success", "admin_count": admin_count})
+        except Exception as e:
+            return jsonify({"status": "error", "message": str(e)}), 500
         
     return app
 
