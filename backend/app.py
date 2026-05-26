@@ -1,7 +1,9 @@
 import os
 from flask import Flask, jsonify
+from flask_session import Session
 from backend.config import Config
 from backend.models import db, User
+from backend.auth import auth_bp
 
 def create_app():
     # Base dir is /backend, templates and static are in /frontend
@@ -13,8 +15,14 @@ def create_app():
     app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
     app.config.from_object(Config)
     
+    # Initialize Session
+    Session(app)
+    
     # Initialize DB
     db.init_app(app)
+    
+    # Register blueprints
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
     
     @app.route('/ping', methods=['GET'])
     def ping():
