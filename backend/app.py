@@ -1,18 +1,12 @@
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_session import Session
 from backend.config import Config
 from backend.models import db, User
 from backend.auth import auth_bp
 
 def create_app():
-    # Base dir is /backend, templates and static are in /frontend
-    base_dir = os.path.abspath(os.path.dirname(__file__))
-    project_root = os.path.dirname(base_dir)
-    template_dir = os.path.join(project_root, 'frontend', 'templates')
-    static_dir = os.path.join(project_root, 'frontend', 'static')
-    
-    app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
+    app = Flask(__name__)
     app.config.from_object(Config)
     
     # Initialize Session
@@ -24,9 +18,25 @@ def create_app():
     # Register blueprints
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     
+    # CORS Manual Setup (with credentials support for cookie-based session tracking)
+    @app.after_request
+    def add_cors_headers(response):
+        origin = request.headers.get('Origin')
+        # Allow requests from localhost/127.0.0.1 on typical ports (e.g. 8000 for frontend server)
+        if origin:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Cookie'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        return response
+
+    @app.route('/<path:path>', methods=['OPTIONS'])
+    def options_handler(path):
+        return '', 200
+        
     @app.route('/ping', methods=['GET'])
     def ping():
-        return jsonify({"message": "Placement Portal backend is running!", "status": "success"})
+        return jsonify({"message": "Placement Portal API is running!", "status": "success"})
         
     @app.route('/test-db', methods=['GET'])
     def test_db():

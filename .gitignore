@@ -10,3 +10,5 @@ static/exports/*.csv
 static/uploads/*
 .pytest_cache/
 .DS_Store
+flask_session/
+cookies.txt
