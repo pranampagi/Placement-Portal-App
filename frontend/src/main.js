@@ -9,9 +9,10 @@ import 'bootstrap-icons/font/bootstrap-icons.css'
 // Import custom styles
 import './style.css'
 
-// Import Axios & Configure Defaults
+// Import Axios & Configure Defaults dynamically
 import axios from 'axios'
-axios.defaults.baseURL = 'http://127.0.0.1:5000'
+const backendHost = window.location.hostname || '127.0.0.1'
+axios.defaults.baseURL = `${window.location.protocol}//${backendHost}:5000`
 axios.defaults.withCredentials = true
 
 // Attach Axios globally for easy access
