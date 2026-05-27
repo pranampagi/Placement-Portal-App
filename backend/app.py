@@ -4,6 +4,7 @@ from flask_session import Session
 from backend.config import Config
 from backend.models import db, User
 from backend.auth import auth_bp
+from backend.admin import admin_bp
 
 def create_app():
     app = Flask(__name__)
@@ -17,12 +18,12 @@ def create_app():
     
     # Register blueprints
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(admin_bp, url_prefix='/api/admin')
     
     # CORS Manual Setup (with credentials support for cookie-based session tracking)
     @app.after_request
     def add_cors_headers(response):
         origin = request.headers.get('Origin')
-        # Allow requests from localhost/127.0.0.1 on typical ports (e.g. 8000 for frontend server)
         if origin:
             response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Credentials'] = 'true'
