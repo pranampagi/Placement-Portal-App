@@ -12,6 +12,11 @@ const props = defineProps({
   }
 })
 
+// Navigation & Detail States
+const viewMode = ref('dashboard') // 'dashboard', 'drive-details', 'application-details'
+const selectedDrive = ref(null)
+const selectedApplication = ref(null)
+
 // Dashboard states
 const stats = ref({ total_students: 0, total_companies: 0, total_drives: 0 })
 const registeredStudents = ref([])
@@ -109,6 +114,23 @@ const handleCloseDrive = async (id) => {
   }
 }
 
+// Subview routing triggers
+const viewDriveDetails = (drive) => {
+  selectedDrive.value = drive
+  viewMode.value = 'drive-details'
+}
+
+const viewApplicationDetails = (app) => {
+  selectedApplication.value = app
+  viewMode.value = 'application-details'
+}
+
+const openResume = (filename) => {
+  if (!filename) return
+  const url = `${window.axios.defaults.baseURL}/static/uploads/${filename}`
+  window.open(url, '_blank')
+}
+
 onMounted(() => {
   fetchDashboardData()
 })
@@ -126,221 +148,372 @@ onMounted(() => {
       <button type="button" class="btn-close p-2" @click="errorMsg = ''"></button>
     </div>
 
-    <!-- Statistics Cards -->
-    <div class="row g-3 mb-4">
-      <div class="col-md-4">
-        <div class="card glass-card p-3 text-center border-0">
-          <i class="bi bi-people text-primary fs-2"></i>
-          <h6 class="text-uppercase text-secondary small fw-bold mt-2">Registered Students</h6>
-          <h2 class="font-outfit text-dark mb-0 mt-1">{{ stats.total_students }}</h2>
+    <!-- 1. DRIVE DETAILS VIEW -->
+    <div v-if="viewMode === 'drive-details' && selectedDrive" class="card glass-card p-4 border-0 mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+        <div>
+          <span class="badge bg-primary text-uppercase mb-2">Drive Details</span>
+          <h2 class="font-outfit text-dark mb-0">{{ selectedDrive.job_title }}</h2>
+          <p class="text-muted mb-0"><i class="bi bi-building me-1"></i>{{ selectedDrive.company_name }}</p>
+        </div>
+        <div class="text-end">
+          <span :class="'badge bg-' + (selectedDrive.status === 'approved' ? 'success' : 'danger') + ' px-3 py-2 text-uppercase'">
+            {{ selectedDrive.status }}
+          </span>
         </div>
       </div>
-      <div class="col-md-4">
-        <div class="card glass-card p-3 text-center border-0">
-          <i class="bi bi-building text-success fs-2"></i>
-          <h6 class="text-uppercase text-secondary small fw-bold mt-2">Registered Companies</h6>
-          <h2 class="font-outfit text-dark mb-0 mt-1">{{ stats.total_companies }}</h2>
+
+      <div class="row g-4 mb-4">
+        <div class="col-md-8">
+          <h5 class="fw-semibold font-outfit mb-2">Job Description</h5>
+          <p class="text-secondary style-desc">{{ selectedDrive.job_description }}</p>
+        </div>
+        <div class="col-md-4">
+          <div class="card bg-light border-0 p-3 rounded-3">
+            <h6 class="font-outfit fw-bold text-secondary mb-3">Specifications</h6>
+            
+            <div class="mb-2 small">
+              <span class="text-muted">Salary Range:</span>
+              <div class="fw-semibold">₹ {{ selectedDrive.salary.toLocaleString() }} LPA</div>
+            </div>
+            
+            <div class="mb-2 small">
+              <span class="text-muted">Job Location:</span>
+              <div class="fw-semibold">{{ selectedDrive.location }}</div>
+            </div>
+
+            <div class="mb-2 small">
+              <span class="text-muted">Eligible Branch:</span>
+              <div class="fw-semibold">{{ selectedDrive.eligibility_branch }}</div>
+            </div>
+
+            <div class="mb-2 small">
+              <span class="text-muted">Min CGPA Required:</span>
+              <div class="fw-semibold">{{ selectedDrive.eligibility_cgpa }}</div>
+            </div>
+
+            <div class="small">
+              <span class="text-muted">Apply Deadline:</span>
+              <div class="fw-semibold text-danger">{{ new Date(selectedDrive.deadline).toLocaleString() }}</div>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="col-md-4">
-        <div class="card glass-card p-3 text-center border-0">
-          <i class="bi bi-calendar-event text-info fs-2"></i>
-          <h6 class="text-uppercase text-secondary small fw-bold mt-2">Placement Drives</h6>
-          <h2 class="font-outfit text-dark mb-0 mt-1">{{ stats.total_drives }}</h2>
-        </div>
+
+      <div class="d-flex justify-content-start">
+        <button @click="viewMode = 'dashboard'" class="btn btn-outline-secondary px-4 rounded-pill">
+          <i class="bi bi-arrow-left me-2"></i>Go Back
+        </button>
       </div>
     </div>
 
-    <!-- Pending Approvals section -->
-    <div class="row g-4 mb-4">
-      <div class="col-lg-6">
-        <div class="card glass-card border-0 p-3 h-100">
-          <h5 class="font-outfit mb-3">Company Applications</h5>
-          <div v-if="pendingCompanies.length === 0" class="text-muted text-center py-4 small">
-            No pending company registration approvals.
+    <!-- 2. STUDENT APPLICATION DETAILS VIEW -->
+    <div v-else-if="viewMode === 'application-details' && selectedApplication" class="card glass-card p-4 border-0 mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+        <div>
+          <span class="badge bg-info text-dark text-uppercase mb-2">Student Application</span>
+          <h2 class="font-outfit text-dark mb-0">{{ selectedApplication.student_name }}</h2>
+          <p class="text-muted mb-0"><i class="bi bi-envelope me-1"></i>{{ selectedApplication.student_email }}</p>
+        </div>
+        <div class="text-end">
+          <span :class="'badge badge-' + selectedApplication.status + ' px-3 py-2 text-uppercase'">
+            {{ selectedApplication.status }}
+          </span>
+        </div>
+      </div>
+
+      <div class="row g-4 mb-4">
+        <div class="col-md-6">
+          <div class="card bg-light border-0 p-3 h-100 rounded-3">
+            <h5 class="font-outfit fw-bold text-secondary mb-3">Academic Summary</h5>
+            <div class="row g-3">
+              <div class="col-6 small">
+                <span class="text-muted d-block">Department/Branch:</span>
+                <span class="fw-semibold">{{ selectedApplication.student_branch }}</span>
+              </div>
+              <div class="col-6 small">
+                <span class="text-muted d-block">CGPA:</span>
+                <span class="fw-semibold">{{ selectedApplication.student_cgpa }}</span>
+              </div>
+              <div class="col-6 small">
+                <span class="text-muted d-block">Graduation Year:</span>
+                <span class="fw-semibold">{{ selectedApplication.student_year }}</span>
+              </div>
+              <div class="col-6 small">
+                <span class="text-muted d-block">Applied Date:</span>
+                <span class="fw-semibold">{{ new Date(selectedApplication.application_date).toLocaleDateString() }}</span>
+              </div>
+            </div>
           </div>
-          <div v-else class="list-group list-group-flush">
-            <div v-for="comp in pendingCompanies" :key="comp.id" class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0 py-3 border-bottom">
-              <div>
-                <h6 class="mb-0 fw-semibold">{{ comp.name }}</h6>
-                <div class="small text-muted">
-                  HR: {{ comp.hr_contact }} | <a :href="comp.website" target="_blank" class="text-decoration-none text-primary">{{ comp.website }}</a>
+        </div>
+
+        <div class="col-md-6">
+          <div class="card bg-light border-0 p-3 h-100 rounded-3">
+            <h5 class="font-outfit fw-bold text-secondary mb-3">Drive Information</h5>
+            <div class="row g-3">
+              <div class="col-12 small">
+                <span class="text-muted d-block">Position:</span>
+                <span class="fw-semibold text-primary fs-6">{{ selectedApplication.job_title }}</span>
+              </div>
+              <div class="col-12 small">
+                <span class="text-muted d-block">Recruiting Organization:</span>
+                <span class="fw-semibold">{{ selectedApplication.company_name }}</span>
+              </div>
+              <div class="col-12 small" v-if="selectedApplication.remark">
+                <span class="text-muted d-block">Remarks:</span>
+                <span class="text-secondary italic">{{ selectedApplication.remark }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mb-4" v-if="selectedApplication.student_resume">
+        <h5 class="font-outfit fw-bold mb-3">Candidate Resume</h5>
+        <div class="d-flex align-items-center gap-3 bg-white p-3 rounded-3 border">
+          <i class="bi bi-file-earmark-pdf-fill text-danger fs-1"></i>
+          <div>
+            <div class="fw-semibold text-dark">{{ selectedApplication.student_resume }}</div>
+            <div class="small text-muted">Uploaded PDF Document</div>
+          </div>
+          <button @click="openResume(selectedApplication.student_resume)" class="btn btn-primary btn-sm ms-auto px-3 rounded-pill">
+            <i class="bi bi-eye me-1"></i>view resume
+          </button>
+        </div>
+      </div>
+      <div v-else class="alert alert-warning mb-4">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>No resume uploaded by this candidate.
+      </div>
+
+      <div class="d-flex justify-content-start">
+        <button @click="viewMode = 'dashboard'" class="btn btn-outline-secondary px-4 rounded-pill">
+          <i class="bi bi-arrow-left me-2"></i>back
+        </button>
+      </div>
+    </div>
+
+    <!-- 3. MAIN DASHBOARD VIEW -->
+    <div v-else>
+      <!-- Statistics Cards -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-4">
+          <div class="card glass-card p-3 text-center border-0">
+            <i class="bi bi-people text-primary fs-2"></i>
+            <h6 class="text-uppercase text-secondary small fw-bold mt-2">Registered Students</h6>
+            <h2 class="font-outfit text-dark mb-0 mt-1">{{ stats.total_students }}</h2>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card glass-card p-3 text-center border-0">
+            <i class="bi bi-building text-success fs-2"></i>
+            <h6 class="text-uppercase text-secondary small fw-bold mt-2">Registered Companies</h6>
+            <h2 class="font-outfit text-dark mb-0 mt-1">{{ stats.total_companies }}</h2>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card glass-card p-3 text-center border-0">
+            <i class="bi bi-calendar-event text-info fs-2"></i>
+            <h6 class="text-uppercase text-secondary small fw-bold mt-2">Placement Drives</h6>
+            <h2 class="font-outfit text-dark mb-0 mt-1">{{ stats.total_drives }}</h2>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pending Approvals & Ongoing Drives -->
+      <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+          <div class="card glass-card border-0 p-3 h-100">
+            <h5 class="font-outfit mb-3">Company Applications</h5>
+            <div v-if="pendingCompanies.length === 0" class="text-muted text-center py-4 small">
+              No pending company registration approvals.
+            </div>
+            <div v-else class="list-group list-group-flush">
+              <div v-for="comp in pendingCompanies" :key="comp.id" class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0 py-3 border-bottom">
+                <div>
+                  <h6 class="mb-0 fw-semibold">{{ comp.name }}</h6>
+                  <div class="small text-muted">
+                    HR: {{ comp.hr_contact }} | <a :href="comp.website" target="_blank" class="text-decoration-none text-primary">{{ comp.website }}</a>
+                  </div>
+                </div>
+                <div class="btn-actions">
+                  <button @click="handleApproveCompany(comp.id)" class="btn btn-success btn-sm px-3 rounded-pill">Approve</button>
+                  <button @click="handleRejectCompany(comp.id)" class="btn btn-outline-danger btn-sm px-3 rounded-pill">Reject</button>
                 </div>
               </div>
-              <div class="btn-actions">
-                <button @click="handleApproveCompany(comp.id)" class="btn btn-success btn-sm px-3 rounded-pill">Approve</button>
-                <button @click="handleRejectCompany(comp.id)" class="btn btn-outline-danger btn-sm px-3 rounded-pill">Reject</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="card glass-card border-0 p-3 h-100">
+            <h5 class="font-outfit mb-3">Ongoing Drives</h5>
+            <div v-if="ongoingDrives.length === 0" class="text-muted text-center py-4 small">
+              No active placement drives currently.
+            </div>
+            <div v-else class="table-responsive">
+              <table class="table table-sm align-middle table-hover small">
+                <thead>
+                  <tr>
+                    <th>Job Title</th>
+                    <th>Company</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="drive in ongoingDrives" :key="drive.id">
+                    <td class="fw-semibold">{{ drive.job_title }}</td>
+                    <td>{{ drive.company_name }}</td>
+                    <td>
+                      <div class="btn-actions">
+                        <button @click="viewDriveDetails(drive)" class="btn btn-outline-primary btn-sm px-2 rounded">view details</button>
+                        <button @click="handleCloseDrive(drive.id)" class="btn btn-outline-danger btn-sm px-2 rounded">mark as complete</button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Directories & Search filters -->
+      <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+          <div class="card glass-card border-0 p-3 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+              <h5 class="font-outfit mb-0">Registered Companies</h5>
+              <div class="input-group input-group-sm" style="max-width: 250px;">
+                <input type="text" v-model="companySearch" @input="fetchDashboardData" class="form-control" placeholder="Search companies...">
+                <button class="btn btn-outline-secondary" @click="fetchDashboardData"><i class="bi bi-search"></i></button>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Ongoing Drives section -->
-      <div class="col-lg-6">
-        <div class="card glass-card border-0 p-3 h-100">
-          <h5 class="font-outfit mb-3">Ongoing Drives</h5>
-          <div v-if="ongoingDrives.length === 0" class="text-muted text-center py-4 small">
-            No active placement drives currently.
-          </div>
-          <div v-else class="table-responsive">
-            <table class="table table-sm align-middle table-hover small">
-              <thead>
-                <tr>
-                  <th>Job Title</th>
-                  <th>Company</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="drive in ongoingDrives" :key="drive.id">
-                  <td class="fw-semibold">{{ drive.job_title }}</td>
-                  <td>{{ drive.company_name }}</td>
-                  <td>
-                    <div class="btn-actions">
-                      <button class="btn btn-outline-primary btn-sm px-2 rounded">view details</button>
-                      <button @click="handleCloseDrive(drive.id)" class="btn btn-outline-danger btn-sm px-2 rounded">mark as complete</button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Registered Directories & Search filters -->
-    <div class="row g-4 mb-4">
-      <div class="col-lg-6">
-        <div class="card glass-card border-0 p-3 h-100">
-          <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-            <h5 class="font-outfit mb-0">Registered Companies</h5>
-            <!-- Search bar -->
-            <div class="input-group input-group-sm" style="max-width: 250px;">
-              <input type="text" v-model="companySearch" @input="fetchDashboardData" class="form-control" placeholder="Search companies...">
-              <button class="btn btn-outline-secondary" @click="fetchDashboardData"><i class="bi bi-search"></i></button>
+            
+            <div v-if="registeredCompanies.length === 0" class="text-muted text-center py-4 small">
+              No registered companies found.
+            </div>
+            <div v-else class="table-responsive">
+              <table class="table table-sm align-middle table-hover small">
+                <thead>
+                  <tr>
+                    <th>Company Name</th>
+                    <th>HR Contact</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="comp in registeredCompanies" :key="comp.id">
+                    <td class="fw-semibold">{{ comp.name }}</td>
+                    <td>{{ comp.hr_contact }}</td>
+                    <td>
+                      <span v-if="comp.is_blacklisted" class="badge bg-danger">Blacklisted</span>
+                      <span v-else class="badge bg-success">Active</span>
+                    </td>
+                    <td>
+                      <button @click="handleToggleCompanyBlacklist(comp.id)" :class="comp.is_blacklisted ? 'btn-outline-success' : 'btn-outline-danger'" class="btn btn-sm py-1 px-2 rounded">
+                        {{ comp.is_blacklisted ? 'Whitelist' : 'Blacklist' }}
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
-          
-          <div v-if="registeredCompanies.length === 0" class="text-muted text-center py-4 small">
-            No registered companies found.
-          </div>
-          <div v-else class="table-responsive">
-            <table class="table table-sm align-middle table-hover small">
-              <thead>
-                <tr>
-                  <th>Company Name</th>
-                  <th>HR Contact</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="comp in registeredCompanies" :key="comp.id">
-                  <td class="fw-semibold">{{ comp.name }}</td>
-                  <td>{{ comp.hr_contact }}</td>
-                  <td>
-                    <span v-if="comp.is_blacklisted" class="badge bg-danger">Blacklisted</span>
-                    <span v-else class="badge bg-success">Active</span>
-                  </td>
-                  <td>
-                    <button @click="handleToggleCompanyBlacklist(comp.id)" :class="comp.is_blacklisted ? 'btn-outline-success' : 'btn-outline-danger'" class="btn btn-sm py-1 px-2 rounded">
-                      {{ comp.is_blacklisted ? 'Whitelist' : 'Blacklist' }}
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
         </div>
-      </div>
 
-      <!-- Students List -->
-      <div class="col-lg-6">
-        <div class="card glass-card border-0 p-3 h-100">
-          <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-            <h5 class="font-outfit mb-0">Registered Students</h5>
-            <div class="input-group input-group-sm" style="max-width: 250px;">
-              <input type="text" v-model="studentSearch" @input="fetchDashboardData" class="form-control" placeholder="Search students...">
-              <button class="btn btn-outline-secondary" @click="fetchDashboardData"><i class="bi bi-search"></i></button>
+        <div class="col-lg-6">
+          <div class="card glass-card border-0 p-3 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+              <h5 class="font-outfit mb-0">Registered Students</h5>
+              <div class="input-group input-group-sm" style="max-width: 250px;">
+                <input type="text" v-model="studentSearch" @input="fetchDashboardData" class="form-control" placeholder="Search students...">
+                <button class="btn btn-outline-secondary" @click="fetchDashboardData"><i class="bi bi-search"></i></button>
+              </div>
+            </div>
+            
+            <div v-if="registeredStudents.length === 0" class="text-muted text-center py-4 small">
+              No registered students found.
+            </div>
+            <div v-else class="table-responsive">
+              <table class="table table-sm align-middle table-hover small">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Branch / CGPA</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="stud in registeredStudents" :key="stud.id">
+                    <td class="fw-semibold">{{ stud.name }}</td>
+                    <td>{{ stud.branch }} ({{ stud.cgpa }})</td>
+                    <td>
+                      <span v-if="!stud.is_active" class="badge bg-danger">Deactivated</span>
+                      <span v-else class="badge bg-success">Active</span>
+                    </td>
+                    <td>
+                      <button @click="handleToggleStudentActive(stud.id)" :class="stud.is_active ? 'btn-outline-danger' : 'btn-outline-success'" class="btn btn-sm py-1 px-2 rounded">
+                        {{ stud.is_active ? 'Deactivate' : 'Activate' }}
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
-          
-          <div v-if="registeredStudents.length === 0" class="text-muted text-center py-4 small">
-            No registered students found.
-          </div>
-          <div v-else class="table-responsive">
-            <table class="table table-sm align-middle table-hover small">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Branch / CGPA</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="stud in registeredStudents" :key="stud.id">
-                  <td class="fw-semibold">{{ stud.name }}</td>
-                  <td>{{ stud.branch }} ({{ stud.cgpa }})</td>
-                  <td>
-                    <span v-if="!stud.is_active" class="badge bg-danger">Deactivated</span>
-                    <span v-else class="badge bg-success">Active</span>
-                  </td>
-                  <td>
-                    <button @click="handleToggleStudentActive(stud.id)" :class="stud.is_active ? 'btn-outline-danger' : 'btn-outline-success'" class="btn btn-sm py-1 px-2 rounded">
-                      {{ stud.is_active ? 'Deactivate' : 'Activate' }}
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Student Applications -->
-    <div class="row g-4">
-      <div class="col-12">
-        <div class="card glass-card border-0 p-3">
-          <h5 class="font-outfit mb-3">Student Applications</h5>
-          <div v-if="studentApplications.length === 0" class="text-muted text-center py-4 small">
-            No student placement applications submitted yet.
-          </div>
-          <div v-else class="table-responsive">
-            <table class="table align-middle table-hover small">
-              <thead>
-                <tr>
-                  <th>Sr No.</th>
-                  <th>Student Name</th>
-                  <th>Placement Drive</th>
-                  <th>Company</th>
-                  <th>Date</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(app, idx) in studentApplications" :key="app.id">
-                  <td>{{ idx + 1 }}</td>
-                  <td class="fw-semibold">{{ app.student_name }}</td>
-                  <td>{{ app.job_title }}</td>
-                  <td>{{ app.company_name }}</td>
-                  <td>{{ new Date(app.application_date).toLocaleDateString() }}</td>
-                  <td>
-                    <span :class="'badge badge-' + app.status" class="px-2 py-1 text-uppercase">{{ app.status }}</span>
-                  </td>
-                  <td>
-                    <button class="btn btn-outline-primary btn-sm px-2 rounded">view</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+      <!-- Student Applications -->
+      <div class="row g-4">
+        <div class="col-12">
+          <div class="card glass-card border-0 p-3">
+            <h5 class="font-outfit mb-3">Student Applications</h5>
+            <div v-if="studentApplications.length === 0" class="text-muted text-center py-4 small">
+              No student placement applications submitted yet.
+            </div>
+            <div v-else class="table-responsive">
+              <table class="table align-middle table-hover small">
+                <thead>
+                  <tr>
+                    <th>Sr No.</th>
+                    <th>Student Name</th>
+                    <th>Placement Drive</th>
+                    <th>Company</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(app, idx) in studentApplications" :key="app.id">
+                    <td>{{ idx + 1 }}</td>
+                    <td class="fw-semibold">{{ app.student_name }}</td>
+                    <td>{{ app.job_title }}</td>
+                    <td>{{ app.company_name }}</td>
+                    <td>{{ new Date(app.application_date).toLocaleDateString() }}</td>
+                    <td>
+                      <span :class="'badge badge-' + app.status" class="px-2 py-1 text-uppercase">{{ app.status }}</span>
+                    </td>
+                    <td>
+                      <button @click="viewApplicationDetails(app)" class="btn btn-outline-primary btn-sm px-2 rounded">view</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.style-desc {
+  white-space: pre-line;
+  line-height: 1.6;
+}
+</style>

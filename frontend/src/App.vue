@@ -16,10 +16,14 @@ const successMsg = ref('')
 const checkSession = async () => {
   try {
     const res = await window.axios.get('/api/auth/me')
-    if (res.data.status === 'success') {
+    if (res.data.status === 'success' && res.data.user) {
       currentUser.value = res.data.user
       isAuthenticated.value = true
       currentView.value = 'dashboard'
+    } else {
+      isAuthenticated.value = false
+      currentUser.value = null
+      currentView.value = 'login'
     }
   } catch (err) {
     isAuthenticated.value = false

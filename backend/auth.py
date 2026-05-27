@@ -167,12 +167,12 @@ def logout():
 @auth_bp.route('/me', methods=['GET'])
 def get_current_user():
     if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "Not logged in."}), 401
+        return jsonify({"status": "success", "authenticated": False, "user": None})
         
     user = User.query.get(session['user_id'])
     if not user or not user.is_active:
         session.clear()
-        return jsonify({"status": "error", "message": "Account deactivated."}), 401
+        return jsonify({"status": "success", "authenticated": False, "user": None})
         
     approval_status = None
     if user.role == 'company' and user.company_profile:
@@ -180,6 +180,7 @@ def get_current_user():
         
     return jsonify({
         "status": "success",
+        "authenticated": True,
         "user": {
             "id": user.id,
             "username": user.username,
@@ -188,3 +189,7 @@ def get_current_user():
             "approval_status": approval_status
         }
     })
+
+
+
+
