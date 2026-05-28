@@ -22,6 +22,7 @@ const stats = ref({ total_students: 0, total_companies: 0, total_drives: 0 })
 const registeredStudents = ref([])
 const registeredCompanies = ref([])
 const pendingCompanies = ref([])
+const pendingDrives = ref([])
 const ongoingDrives = ref([])
 const studentApplications = ref([])
 
@@ -45,6 +46,7 @@ const fetchDashboardData = async () => {
       registeredStudents.value = res.data.registered_students
       registeredCompanies.value = res.data.registered_companies
       pendingCompanies.value = res.data.pending_companies
+      pendingDrives.value = res.data.pending_drives
       ongoingDrives.value = res.data.ongoing_drives
       studentApplications.value = res.data.student_applications
     }
@@ -93,6 +95,18 @@ const handleToggleCompanyBlacklist = async (id) => {
 const handleToggleStudentActive = async (id) => {
   try {
     const res = await window.axios.post(`/api/admin/students/${id}/toggle-active`)
+    if (res.data.status === 'success') {
+      successMsg.value = res.data.message
+      fetchDashboardData()
+    }
+  } catch (err) {
+    errorMsg.value = err.response?.data?.message || 'Action failed.'
+  }
+}
+
+const handleApproveDrive = async (id) => {
+  try {
+    const res = await window.axios.post(`/api/admin/drives/${id}/approve`)
     if (res.data.status === 'success') {
       successMsg.value = res.data.message
       fetchDashboardData()
@@ -157,7 +171,7 @@ onMounted(() => {
           <p class="text-muted mb-0"><i class="bi bi-building me-1"></i>{{ selectedDrive.company_name }}</p>
         </div>
         <div class="text-end">
-          <span :class="'badge bg-' + (selectedDrive.status === 'approved' ? 'success' : 'danger') + ' px-3 py-2 text-uppercase'">
+          <span :class="'badge bg-' + (selectedDrive.status === 'approved' ? 'success' : (selectedDrive.status === 'pending' ? 'warning' : 'danger')) + ' px-3 py-2 text-uppercase'">
             {{ selectedDrive.status }}
           </span>
         </div>
@@ -319,8 +333,9 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Pending Approvals & Ongoing Drives -->
+      <!-- Pending Applications section (Company Onboarding & Drive Launches) -->
       <div class="row g-4 mb-4">
+        <!-- Company Applications Card -->
         <div class="col-lg-6">
           <div class="card glass-card border-0 p-3 h-100">
             <h5 class="font-outfit mb-3">Company Applications</h5>
@@ -344,6 +359,33 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- Drive Applications Card (NEW) -->
+        <div class="col-lg-6">
+          <div class="card glass-card border-0 p-3 h-100">
+            <h5 class="font-outfit mb-3">Drive Applications</h5>
+            <div v-if="pendingDrives.length === 0" class="text-muted text-center py-4 small">
+              No pending placement drives awaiting approval.
+            </div>
+            <div v-else class="list-group list-group-flush">
+              <div v-for="drive in pendingDrives" :key="drive.id" class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0 py-3 border-bottom">
+                <div>
+                  <h6 class="mb-0 fw-semibold">{{ drive.job_title }}</h6>
+                  <div class="small text-muted">
+                    Company: {{ drive.company_name }} | Salary: ₹ {{ drive.salary.toLocaleString() }}
+                  </div>
+                </div>
+                <div class="btn-actions">
+                  <button @click="handleApproveDrive(drive.id)" class="btn btn-success btn-sm px-3 rounded-pill">Approve</button>
+                  <button @click="handleCloseDrive(drive.id)" class="btn btn-outline-danger btn-sm px-3 rounded-pill">Reject</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ongoing Drives & Applications tracking -->
+      <div class="row g-4 mb-4">
         <div class="col-lg-6">
           <div class="card glass-card border-0 p-3 h-100">
             <h5 class="font-outfit mb-3">Ongoing Drives</h5>
@@ -368,6 +410,39 @@ onMounted(() => {
                         <button @click="viewDriveDetails(drive)" class="btn btn-outline-primary btn-sm px-2 rounded">view details</button>
                         <button @click="handleCloseDrive(drive.id)" class="btn btn-outline-danger btn-sm px-2 rounded">mark as complete</button>
                       </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="card glass-card border-0 p-3 h-100">
+            <h5 class="font-outfit mb-3">Student Applications</h5>
+            <div v-if="studentApplications.length === 0" class="text-muted text-center py-4 small">
+              No student placement applications submitted yet.
+            </div>
+            <div v-else class="table-responsive">
+              <table class="table table-sm align-middle table-hover small">
+                <thead>
+                  <tr>
+                    <th>Student Name</th>
+                    <th>Placement Drive</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="app in studentApplications.slice(0, 5)" :key="app.id">
+                    <td class="fw-semibold">{{ app.student_name }}</td>
+                    <td>{{ app.job_title }}</td>
+                    <td>
+                      <span :class="'badge badge-' + app.status" class="px-2 py-1 text-uppercase" style="font-size: 0.7rem;">{{ app.status }}</span>
+                    </td>
+                    <td>
+                      <button @click="viewApplicationDetails(app)" class="btn btn-outline-primary btn-sm px-2 py-0 rounded">view</button>
                     </td>
                   </tr>
                 </tbody>
@@ -457,48 +532,6 @@ onMounted(() => {
                       <button @click="handleToggleStudentActive(stud.id)" :class="stud.is_active ? 'btn-outline-danger' : 'btn-outline-success'" class="btn btn-sm py-1 px-2 rounded">
                         {{ stud.is_active ? 'Deactivate' : 'Activate' }}
                       </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Student Applications -->
-      <div class="row g-4">
-        <div class="col-12">
-          <div class="card glass-card border-0 p-3">
-            <h5 class="font-outfit mb-3">Student Applications</h5>
-            <div v-if="studentApplications.length === 0" class="text-muted text-center py-4 small">
-              No student placement applications submitted yet.
-            </div>
-            <div v-else class="table-responsive">
-              <table class="table align-middle table-hover small">
-                <thead>
-                  <tr>
-                    <th>Sr No.</th>
-                    <th>Student Name</th>
-                    <th>Placement Drive</th>
-                    <th>Company</th>
-                    <th>Date</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(app, idx) in studentApplications" :key="app.id">
-                    <td>{{ idx + 1 }}</td>
-                    <td class="fw-semibold">{{ app.student_name }}</td>
-                    <td>{{ app.job_title }}</td>
-                    <td>{{ app.company_name }}</td>
-                    <td>{{ new Date(app.application_date).toLocaleDateString() }}</td>
-                    <td>
-                      <span :class="'badge badge-' + app.status" class="px-2 py-1 text-uppercase">{{ app.status }}</span>
-                    </td>
-                    <td>
-                      <button @click="viewApplicationDetails(app)" class="btn btn-outline-primary btn-sm px-2 rounded">view</button>
                     </td>
                   </tr>
                 </tbody>

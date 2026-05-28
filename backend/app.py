@@ -5,6 +5,7 @@ from backend.config import Config
 from backend.models import db, User
 from backend.auth import auth_bp
 from backend.admin import admin_bp
+from backend.company import company_bp
 
 def create_app():
     app = Flask(__name__)
@@ -19,6 +20,7 @@ def create_app():
     # Register blueprints
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
+    app.register_blueprint(company_bp, url_prefix='/api/company')
     
     # CORS Manual Setup (with credentials support for cookie-based session tracking)
     @app.after_request

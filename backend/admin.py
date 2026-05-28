@@ -54,6 +54,10 @@ def get_admin_dashboard():
     ongoing_drives = PlacementDrive.query.filter_by(status='approved').all()
     ongoing_drives_list = [d.to_dict() for d in ongoing_drives]
     
+    # Pending drives awaiting approval
+    pending_drives = PlacementDrive.query.filter_by(status='pending').all()
+    pending_drives_list = [d.to_dict() for d in pending_drives]
+    
     # 6. Student Applications
     applications = Application.query.order_by(Application.application_date.desc()).all()
     applications_list = [a.to_dict() for a in applications]
@@ -69,6 +73,7 @@ def get_admin_dashboard():
         "registered_companies": companies_list,
         "pending_companies": pending_companies_list,
         "ongoing_drives": ongoing_drives_list,
+        "pending_drives": pending_drives_list,
         "student_applications": applications_list
     })
 
