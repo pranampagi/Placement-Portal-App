@@ -21,6 +21,6 @@ class Config:
     broker_url = 'redis://localhost:6379/2'
     result_backend = 'redis://localhost:6379/2'
     
-    # Upload limits/paths (points to frontend/static/uploads)
-    UPLOAD_FOLDER = os.path.join(os.path.dirname(BASE_DIR), 'frontend', 'static', 'uploads')
+    # Upload limits/paths (points to backend/static/uploads)
+    UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB limit

@@ -78,7 +78,7 @@ const handleLogout = async () => {
     <div class="main-content">
       <AdminPanel v-if="user.role === 'admin'" :user="user" :tab="currentTab" />
       <CompanyPanel v-else-if="user.role === 'company'" :user="user" :tab="currentTab" />
-      <StudentPanel v-else-if="user.role === 'student'" :user="user" :tab="currentTab" />
+      <StudentPanel v-else-if="user.role === 'student'" :user="user" :tab="currentTab" @update-tab="currentTab = $event" />
     </div>
   </div>
 </template>

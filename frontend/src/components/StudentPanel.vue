@@ -1,4 +1,6 @@
 <script setup>
+import { ref, onMounted, watch } from 'vue'
+
 const props = defineProps({
   user: {
     type: Object,
@@ -9,16 +11,328 @@ const props = defineProps({
     required: true
   }
 })
+
+// Core Student State
+const studentProfile = ref({
+  name: '',
+  email: '',
+  branch: '',
+  cgpa: 0.0,
+  graduation_year: new Date().getFullYear(),
+  resume_filename: ''
+})
+
+// Edit Form State
+const editForm = ref({
+  name: '',
+  email: '',
+  branch: '',
+  cgpa: '',
+  graduation_year: ''
+})
+
+// File upload states
+const fileInput = ref(null)
+const selectedFile = ref(null)
+const uploading = ref(false)
+
+const errorMsg = ref('')
+const successMsg = ref('')
+
+const fetchProfile = async () => {
+  try {
+    const res = await window.axios.get('/api/student/profile')
+    if (res.data.status === 'success') {
+      studentProfile.value = res.data.student
+      // Initialize edit form
+      editForm.value = {
+        name: studentProfile.value.name,
+        email: studentProfile.value.email,
+        branch: studentProfile.value.branch,
+        cgpa: studentProfile.value.cgpa,
+        graduation_year: studentProfile.value.graduation_year
+      }
+    }
+  } catch (err) {
+    errorMsg.value = err.response?.data?.message || 'Failed to load student profile.'
+  }
+}
+
+const handleUpdateProfile = async () => {
+  errorMsg.value = ''
+  successMsg.value = ''
+  try {
+    const res = await window.axios.put('/api/student/profile', editForm.value)
+    if (res.data.status === 'success') {
+      successMsg.value = res.data.message
+      studentProfile.value = res.data.student
+    }
+  } catch (err) {
+    errorMsg.value = err.response?.data?.message || 'Failed to update profile.'
+  }
+}
+
+const triggerFileInput = () => {
+  fileInput.value.click()
+}
+
+const onFileChange = (e) => {
+  const files = e.target.files
+  if (files.length > 0) {
+    const file = files[0]
+    if (file.type !== 'application/pdf') {
+      errorMsg.value = 'Only PDF resume files are accepted.'
+      selectedFile.value = null
+      return
+    }
+    selectedFile.value = file
+    errorMsg.value = ''
+  }
+}
+
+const handleResumeUpload = async () => {
+  if (!selectedFile.value) return
+  errorMsg.value = ''
+  successMsg.value = ''
+  uploading.value = true
+
+  const formData = new FormData()
+  formData.append('file', selectedFile.value)
+
+  try {
+    const res = await window.axios.post('/api/student/upload-resume', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+    if (res.data.status === 'success') {
+      successMsg.value = res.data.message
+      studentProfile.value.resume_filename = res.data.resume_filename
+      selectedFile.value = null
+      if (fileInput.value) {
+        fileInput.value.value = ''
+      }
+    }
+  } catch (err) {
+    errorMsg.value = err.response?.data?.message || 'Failed to upload resume.'
+  } finally {
+    uploading.value = false
+  }
+}
+
+const openResume = (filename) => {
+  if (!filename) return
+  const url = `${window.axios.defaults.baseURL}/static/uploads/${filename}`
+  window.open(url, '_blank')
+}
+
+// Fetch details when mounted or tab updates
+onMounted(() => {
+  fetchProfile()
+})
+
+watch(() => props.tab, () => {
+  errorMsg.value = ''
+  successMsg.value = ''
+  fetchProfile()
+})
 </script>
 
 <template>
   <div class="container-fluid fade-in-el">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-      <h1 class="h3 font-outfit mb-0">Student Dashboard</h1>
+    <!-- Feedback Alerts -->
+    <div v-if="successMsg" class="alert alert-success alert-dismissible fade show p-2 small mb-3" role="alert">
+      {{ successMsg }}
+      <button type="button" class="btn-close p-2" @click="successMsg = ''"></button>
     </div>
-    
-    <div class="alert alert-info">
-      <i class="bi bi-info-circle-fill me-2"></i>Welcome, {{ user.username }}. The student dashboard, profile, application eligibility forms, and ATS matches will be integrated next.
+    <div v-if="errorMsg" class="alert alert-danger alert-dismissible fade show p-2 small mb-3" role="alert">
+      {{ errorMsg }}
+      <button type="button" class="btn-close p-2" @click="errorMsg = ''"></button>
+    </div>
+
+    <!-- 1. DASHBOARD VIEW -->
+    <div v-if="tab === 'dashboard'">
+      <div class="card glass-card border-0 p-4 mb-4">
+        <h2 class="font-outfit mb-1">Welcome back, {{ studentProfile.name || user.username }}!</h2>
+        <p class="text-secondary mb-0">Track your academic eligibility and manage your resumes for ongoing drives.</p>
+      </div>
+
+      <div class="row g-4 mb-4">
+        <!-- Academic details overview -->
+        <div class="col-md-7">
+          <div class="card glass-card border-0 p-3 h-100">
+            <h5 class="font-outfit mb-3">Academic Summary</h5>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle table-borderless small">
+                <tbody>
+                  <tr>
+                    <td class="text-muted py-2" style="width: 35%;">Full Name:</td>
+                    <td class="fw-semibold py-2">{{ studentProfile.name || 'Not configured' }}</td>
+                  </tr>
+                  <tr>
+                    <td class="text-muted py-2">Email Address:</td>
+                    <td class="fw-semibold py-2">{{ studentProfile.email || 'Not configured' }}</td>
+                  </tr>
+                  <tr>
+                    <td class="text-muted py-2">Department / Branch:</td>
+                    <td class="fw-semibold py-2">{{ studentProfile.branch || 'Not configured' }}</td>
+                  </tr>
+                  <tr>
+                    <td class="text-muted py-2">Current CGPA:</td>
+                    <td class="fw-semibold py-2">
+                      <span class="badge bg-primary fs-6">{{ studentProfile.cgpa ? studentProfile.cgpa.toFixed(2) : '0.00' }}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-muted py-2">Graduation Year:</td>
+                    <td class="fw-semibold py-2">{{ studentProfile.graduation_year }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Resume status overview -->
+        <div class="col-md-5">
+          <div class="card glass-card border-0 p-3 h-100 text-center d-flex flex-column justify-content-center align-items-center">
+            <h5 class="font-outfit mb-3 align-self-start">Resume Attachment</h5>
+            
+            <div v-if="studentProfile.resume_filename" class="my-auto py-2">
+              <i class="bi bi-file-earmark-check-fill text-success fs-1 mb-2 d-block"></i>
+              <div class="fw-semibold text-dark text-truncate px-3 mb-1" style="max-width: 250px;">{{ studentProfile.resume_filename }}</div>
+              <span class="badge bg-success mb-3 text-uppercase">active resume</span>
+              <div class="d-flex gap-2 justify-content-center">
+                <button @click="openResume(studentProfile.resume_filename)" class="btn btn-outline-primary btn-sm rounded-pill px-3">
+                  <i class="bi bi-eye me-1"></i>View File
+                </button>
+              </div>
+            </div>
+            
+            <div v-else class="my-auto py-2">
+              <i class="bi bi-file-earmark-arrow-up-fill text-warning fs-1 mb-2 d-block"></i>
+              <div class="fw-semibold text-secondary mb-1">No resume uploaded</div>
+              <p class="small text-muted px-4 mb-3">You must upload a PDF resume to apply for placement drives.</p>
+              <button @click="$emit('update-tab', 'profile')" class="btn btn-primary btn-sm rounded-pill px-4">
+                Upload Resume
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Eligible drives (Placeholder for Commit 12) -->
+      <div class="card glass-card border-0 p-3 mb-4">
+        <h5 class="font-outfit mb-3">Eligible Placement Drives</h5>
+        <div class="alert alert-info mb-0 small">
+          <i class="bi bi-info-circle-fill me-2"></i>Drives browsing and application flows will be fully integrated in the next update.
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. EDIT PROFILE VIEW -->
+    <div v-else-if="tab === 'profile'">
+      <div class="row g-4">
+        <!-- Edit Profile Form -->
+        <div class="col-lg-7">
+          <div class="card glass-card border-0 p-4 mb-4">
+            <h5 class="font-outfit mb-3 pb-2 border-bottom">Academic Profile Details</h5>
+            <form @submit.prevent="handleUpdateProfile">
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label class="form-label small fw-semibold">Full Name</label>
+                  <input type="text" v-model="editForm.name" class="form-control" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="form-label small fw-semibold">Email Address</label>
+                  <input type="email" v-model="editForm.email" class="form-control" required>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label class="form-label small fw-semibold">Branch / Department</label>
+                  <input type="text" v-model="editForm.branch" class="form-control" required placeholder="e.g. CSE">
+                </div>
+                <div class="col-md-3 mb-3">
+                  <label class="form-label small fw-semibold">CGPA</label>
+                  <input type="number" step="0.01" min="0" max="10" v-model="editForm.cgpa" class="form-control" required placeholder="e.g. 8.5">
+                </div>
+                <div class="col-md-3 mb-3">
+                  <label class="form-label small fw-semibold">Graduation Year</label>
+                  <input type="number" v-model="editForm.graduation_year" class="form-control" required>
+                </div>
+              </div>
+              <div class="d-flex justify-content-end mt-3">
+                <button type="submit" class="btn btn-primary rounded-pill px-4">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Resume File Upload Card -->
+        <div class="col-lg-5">
+          <div class="card glass-card border-0 p-4 mb-4">
+            <h5 class="font-outfit mb-3 pb-2 border-bottom">Resume File Upload</h5>
+            <p class="small text-secondary mb-3">Upload a clean PDF copy of your professional resume. Only PDF files up to 16MB are accepted.</p>
+            
+            <div class="upload-dropzone p-4 mb-3 border border-2 border-dashed rounded-3 text-center bg-light">
+              <input type="file" ref="fileInput" @change="onFileChange" accept=".pdf" class="d-none">
+              
+              <div v-if="!selectedFile">
+                <i class="bi bi-cloud-arrow-up text-primary fs-1 mb-2"></i>
+                <div class="small fw-semibold text-dark">Drag and drop file here</div>
+                <div class="small text-muted mb-3">or browse locally</div>
+                <button type="button" @click="triggerFileInput" class="btn btn-outline-primary btn-sm px-3 rounded-pill">Choose File</button>
+              </div>
+              
+              <div v-else>
+                <i class="bi bi-file-pdf-fill text-danger fs-1 mb-2"></i>
+                <div class="small fw-semibold text-dark text-truncate px-3 mb-2" style="max-width: 300px;">{{ selectedFile.name }}</div>
+                <div class="small text-muted mb-3">({{(selectedFile.size / 1024).toFixed(1)}} KB)</div>
+                <div class="d-flex gap-2 justify-content-center">
+                  <button type="button" @click="selectedFile = null" class="btn btn-outline-secondary btn-sm px-3 rounded-pill">Cancel</button>
+                  <button type="button" @click="handleResumeUpload" :disabled="uploading" class="btn btn-success btn-sm px-3 rounded-pill">
+                    <span v-if="uploading" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                    {{ uploading ? 'Uploading...' : 'Upload' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div v-if="studentProfile.resume_filename" class="p-3 bg-light rounded-3 border">
+              <div class="d-flex align-items-center gap-2 small">
+                <i class="bi bi-check-circle-fill text-success fs-5"></i>
+                <div class="text-truncate">
+                  <span class="d-block text-dark fw-semibold">Current Resume:</span>
+                  <span class="text-muted">{{ studentProfile.resume_filename }}</span>
+                </div>
+                <button @click="openResume(studentProfile.resume_filename)" class="btn btn-link btn-sm ms-auto text-decoration-none">View</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. APPLICATION HISTORY VIEW -->
+    <div v-else-if="tab === 'history'">
+      <div class="card glass-card border-0 p-3 mb-4">
+        <h5 class="font-outfit mb-3">Application History</h5>
+        <div class="alert alert-info mb-0 small">
+          <i class="bi bi-info-circle-fill me-2"></i>Application status histories and real-time reviews will be fully integrated in **Commit 12**.
+        </div>
+      </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.upload-dropzone {
+  transition: all 0.3s ease;
+  border-color: #cbd5e1 !important;
+}
+.upload-dropzone:hover {
+  border-color: var(--primary-color) !important;
+  background-color: #f1f5f9 !important;
+}
+</style>
