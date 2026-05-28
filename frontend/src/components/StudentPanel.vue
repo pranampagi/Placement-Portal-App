@@ -31,6 +31,10 @@ const editForm = ref({
   graduation_year: ''
 })
 
+// Eligible Drives and History Applications
+const eligibleDrives = ref([])
+const applications = ref([])
+
 // File upload states
 const fileInput = ref(null)
 const selectedFile = ref(null)
@@ -58,6 +62,28 @@ const fetchProfile = async () => {
   }
 }
 
+const fetchEligibleDrives = async () => {
+  try {
+    const res = await window.axios.get('/api/student/eligible-drives')
+    if (res.data.status === 'success') {
+      eligibleDrives.value = res.data.drives
+    }
+  } catch (err) {
+    errorMsg.value = err.response?.data?.message || 'Failed to load eligible drives.'
+  }
+}
+
+const fetchApplications = async () => {
+  try {
+    const res = await window.axios.get('/api/student/applications')
+    if (res.data.status === 'success') {
+      applications.value = res.data.applications
+    }
+  } catch (err) {
+    errorMsg.value = err.response?.data?.message || 'Failed to load application history.'
+  }
+}
+
 const handleUpdateProfile = async () => {
   errorMsg.value = ''
   successMsg.value = ''
@@ -66,9 +92,26 @@ const handleUpdateProfile = async () => {
     if (res.data.status === 'success') {
       successMsg.value = res.data.message
       studentProfile.value = res.data.student
+      if (props.tab === 'dashboard') {
+        fetchEligibleDrives()
+      }
     }
   } catch (err) {
     errorMsg.value = err.response?.data?.message || 'Failed to update profile.'
+  }
+}
+
+const handleApply = async (driveId) => {
+  errorMsg.value = ''
+  successMsg.value = ''
+  try {
+    const res = await window.axios.post('/api/student/apply', { drive_id: driveId })
+    if (res.data.status === 'success') {
+      successMsg.value = res.data.message
+      fetchEligibleDrives()
+    }
+  } catch (err) {
+    errorMsg.value = err.response?.data?.message || 'Failed to submit application.'
   }
 }
 
@@ -112,6 +155,9 @@ const handleResumeUpload = async () => {
       if (fileInput.value) {
         fileInput.value.value = ''
       }
+      if (props.tab === 'dashboard') {
+        fetchEligibleDrives()
+      }
     }
   } catch (err) {
     errorMsg.value = err.response?.data?.message || 'Failed to upload resume.'
@@ -126,15 +172,25 @@ const openResume = (filename) => {
   window.open(url, '_blank')
 }
 
+// Unified data loader based on active tab
+const loadTabData = () => {
+  fetchProfile()
+  if (props.tab === 'dashboard') {
+    fetchEligibleDrives()
+  } else if (props.tab === 'history') {
+    fetchApplications()
+  }
+}
+
 // Fetch details when mounted or tab updates
 onMounted(() => {
-  fetchProfile()
+  loadTabData()
 })
 
 watch(() => props.tab, () => {
   errorMsg.value = ''
   successMsg.value = ''
-  fetchProfile()
+  loadTabData()
 })
 </script>
 
@@ -221,11 +277,50 @@ watch(() => props.tab, () => {
         </div>
       </div>
 
-      <!-- Eligible drives (Placeholder for Commit 12) -->
+      <!-- Eligible placement drives table -->
       <div class="card glass-card border-0 p-3 mb-4">
         <h5 class="font-outfit mb-3">Eligible Placement Drives</h5>
-        <div class="alert alert-info mb-0 small">
-          <i class="bi bi-info-circle-fill me-2"></i>Drives browsing and application flows will be fully integrated in the next update.
+        
+        <div v-if="eligibleDrives.length === 0" class="text-muted text-center py-4 small">
+          No eligible placement drives found matching your branch, CGPA, and graduation year.
+        </div>
+        
+        <div v-else class="table-responsive">
+          <table class="table table-hover align-middle small">
+            <thead>
+              <tr>
+                <th>Job Title</th>
+                <th>Company</th>
+                <th>CTC / Salary</th>
+                <th>Location</th>
+                <th>Deadline</th>
+                <th>Status / Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="drive in eligibleDrives" :key="drive.id">
+                <td class="fw-semibold">{{ drive.job_title }}</td>
+                <td>{{ drive.company_name }}</td>
+                <td>₹ {{ drive.salary.toLocaleString() }}</td>
+                <td>{{ drive.location }}</td>
+                <td>{{ new Date(drive.deadline).toLocaleString() }}</td>
+                <td>
+                  <span v-if="drive.applied" :class="'badge badge-' + drive.application_status + ' text-uppercase px-2 py-1'">
+                    {{ drive.application_status }}
+                  </span>
+                  <button 
+                    v-else 
+                    @click="handleApply(drive.id)" 
+                    :disabled="!studentProfile.resume_filename"
+                    class="btn btn-primary btn-sm rounded px-3 py-1"
+                    :title="!studentProfile.resume_filename ? 'Please upload your resume in the Profile tab to apply.' : ''"
+                  >
+                    Apply Now
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -318,8 +413,38 @@ watch(() => props.tab, () => {
     <div v-else-if="tab === 'history'">
       <div class="card glass-card border-0 p-3 mb-4">
         <h5 class="font-outfit mb-3">Application History</h5>
-        <div class="alert alert-info mb-0 small">
-          <i class="bi bi-info-circle-fill me-2"></i>Application status histories and real-time reviews will be fully integrated in **Commit 12**.
+        
+        <div v-if="applications.length === 0" class="text-muted text-center py-4 small">
+          You haven't applied to any placement drives yet.
+        </div>
+        
+        <div v-else class="table-responsive">
+          <table class="table table-hover align-middle small">
+            <thead>
+              <tr>
+                <th>Job Title</th>
+                <th>Company</th>
+                <th>Applied Date</th>
+                <th>Status</th>
+                <th>Remarks / Feedback</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="app in applications" :key="app.id">
+                <td class="fw-semibold">{{ app.job_title }}</td>
+                <td>{{ app.company_name }}</td>
+                <td>{{ new Date(app.application_date).toLocaleDateString() }}</td>
+                <td>
+                  <span :class="'badge badge-' + app.status + ' text-uppercase px-2 py-1'">
+                    {{ app.status }}
+                  </span>
+                </td>
+                <td>
+                  <span class="text-secondary italic">{{ app.remark || 'Under Review' }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
