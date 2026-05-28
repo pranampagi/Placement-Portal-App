@@ -96,3 +96,56 @@ def create_drive():
     except Exception as e:
         db.session.rollback()
         return jsonify({"status": "error", "message": f"Failed to create drive: {str(e)}"}), 500
+
+@company_bp.route('/drives/<int:drive_id>/applications', methods=['GET'])
+@login_required
+@roles_required('company')
+def get_drive_applications(drive_id):
+    company = CompanyProfile.query.filter_by(user_id=session['user_id']).first_or_404()
+    drive = PlacementDrive.query.filter_by(id=drive_id, company_id=company.id).first_or_404()
+    applications = Application.query.filter_by(drive_id=drive.id).all()
+    return jsonify({
+        "status": "success",
+        "applications": [app.to_dict() for app in applications]
+    })
+
+@company_bp.route('/applications/<int:app_id>/status', methods=['POST'])
+@login_required
+@roles_required('company')
+def update_application_status(app_id):
+    company = CompanyProfile.query.filter_by(user_id=session['user_id']).first_or_404()
+    application = Application.query.get_or_404(app_id)
+    
+    # Check if this application belongs to a drive of the current company
+    if application.drive.company_id != company.id:
+        return jsonify({
+            "status": "error",
+            "message": "Unauthorized to update this application."
+        }), 403
+        
+    data = request.get_json() or {}
+    new_status = data.get('status')
+    remark = data.get('remark', '')
+    
+    if not new_status or new_status not in ['applied', 'shortlisted', 'selected', 'rejected']:
+        return jsonify({
+            "status": "error",
+            "message": "Invalid status value. Must be 'applied', 'shortlisted', 'selected', or 'rejected'."
+        }), 400
+        
+    try:
+        application.status = new_status
+        application.remark = remark
+        db.session.commit()
+        return jsonify({
+            "status": "success",
+            "message": "Application status updated successfully.",
+            "application": application.to_dict()
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to update application status: {str(e)}"
+        }), 500
+

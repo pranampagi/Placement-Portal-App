@@ -13,13 +13,20 @@ const props = defineProps({
 })
 
 // Views & Detail States
-const viewMode = ref('dashboard') // 'dashboard', 'create-drive', 'drive-details'
+const viewMode = ref('dashboard') // 'dashboard', 'create-drive', 'drive-details', 'application-details'
 const selectedDrive = ref(null)
+const selectedApplication = ref(null)
 
 // Data states
 const companyDetails = ref({ name: '', hr_contact: '', website: '', approval_status: '' })
 const upcomingDrives = ref([])
 const closedDrives = ref([])
+const driveApplications = ref([])
+
+const statusUpdateForm = ref({
+  status: 'applied',
+  remark: ''
+})
 
 // Form states
 const newDrive = ref({
@@ -84,9 +91,60 @@ const handleCreateDrive = async () => {
   }
 }
 
-const showDriveDetails = (drive) => {
+const showDriveDetails = async (drive) => {
   selectedDrive.value = drive
   viewMode.value = 'drive-details'
+  driveApplications.value = []
+  try {
+    const res = await window.axios.get(`/api/company/drives/${drive.id}/applications`)
+    if (res.data.status === 'success') {
+      driveApplications.value = res.data.applications
+    }
+  } catch (err) {
+    errorMsg.value = err.response?.data?.message || 'Failed to load applications for this drive.'
+  }
+}
+
+const viewApplicationDetails = (app) => {
+  selectedApplication.value = app
+  statusUpdateForm.value.status = app.status
+  statusUpdateForm.value.remark = app.remark || ''
+  viewMode.value = 'application-details'
+}
+
+const openResume = (filename) => {
+  if (!filename) return
+  const url = `${window.axios.defaults.baseURL}/static/uploads/${filename}`
+  window.open(url, '_blank')
+}
+
+const goBackToDriveDetails = () => {
+  viewMode.value = 'drive-details'
+}
+
+const handleUpdateApplicationStatus = async () => {
+  errorMsg.value = ''
+  successMsg.value = ''
+  try {
+    const res = await window.axios.post(`/api/company/applications/${selectedApplication.value.id}/status`, {
+      status: statusUpdateForm.value.status,
+      remark: statusUpdateForm.value.remark
+    })
+    if (res.data.status === 'success') {
+      successMsg.value = res.data.message
+      selectedApplication.value = res.data.application
+      if (selectedDrive.value) {
+        // Refresh drive applications list
+        const appsRes = await window.axios.get(`/api/company/drives/${selectedDrive.value.id}/applications`)
+        if (appsRes.data.status === 'success') {
+          driveApplications.value = appsRes.data.applications
+        }
+      }
+      viewMode.value = 'drive-details'
+    }
+  } catch (err) {
+    errorMsg.value = err.response?.data?.message || 'Failed to update application status.'
+  }
 }
 
 onMounted(() => {
@@ -217,10 +275,161 @@ onMounted(() => {
         </div>
       </div>
 
+      <!-- Received Applications List -->
+      <div class="card bg-white border-0 shadow-sm p-4 mb-4 rounded-3" v-if="selectedDrive.status === 'approved'">
+        <h5 class="fw-semibold font-outfit mb-3">Received Applications</h5>
+        <div v-if="driveApplications.length === 0" class="text-muted text-center py-4 small">
+          No student applications received yet for this placement drive.
+        </div>
+        <div v-else class="table-responsive">
+          <table class="table table-hover align-middle small">
+            <thead>
+              <tr>
+                <th>Student Name</th>
+                <th>Branch</th>
+                <th>CGPA</th>
+                <th>Graduation Year</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="app in driveApplications" :key="app.id">
+                <td class="fw-semibold">{{ app.student_name }}</td>
+                <td>{{ app.student_branch }}</td>
+                <td>{{ app.student_cgpa }}</td>
+                <td>{{ app.student_year }}</td>
+                <td>
+                  <span :class="'badge badge-' + app.status + ' text-uppercase'">
+                    {{ app.status }}
+                  </span>
+                </td>
+                <td>
+                  <button @click="viewApplicationDetails(app)" class="btn btn-outline-primary btn-sm rounded px-2">
+                    Review Application
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div v-else class="alert alert-info mb-4 small">
+        <i class="bi bi-info-circle-fill me-2"></i>Applications list will be available once the drive is approved by the Admin.
+      </div>
+
       <div class="d-flex justify-content-start">
         <button @click="viewMode = 'dashboard'" class="btn btn-outline-secondary px-4 rounded-pill">
           <i class="bi bi-arrow-left me-2"></i>Go Back
         </button>
+      </div>
+    </div>
+
+    <!-- 4. STUDENT APPLICATION DETAILS & REVIEW VIEW -->
+    <div v-else-if="viewMode === 'application-details' && selectedApplication" class="card glass-card p-4 border-0 mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+        <div>
+          <span class="badge bg-info text-dark text-uppercase mb-2">Review Student Application</span>
+          <h2 class="font-outfit text-dark mb-0">{{ selectedApplication.student_name }}</h2>
+          <p class="text-muted mb-0"><i class="bi bi-envelope me-1"></i>{{ selectedApplication.student_email }}</p>
+        </div>
+        <div class="text-end">
+          <span :class="'badge badge-' + selectedApplication.status + ' px-3 py-2 text-uppercase'">
+            {{ selectedApplication.status }}
+          </span>
+        </div>
+      </div>
+
+      <div class="row g-4 mb-4">
+        <!-- Academic Summary -->
+        <div class="col-md-6">
+          <div class="card bg-light border-0 p-3 h-100 rounded-3">
+            <h5 class="font-outfit fw-bold text-secondary mb-3">Academic Summary</h5>
+            <div class="row g-3">
+              <div class="col-6 small">
+                <span class="text-muted d-block">Department/Branch:</span>
+                <span class="fw-semibold">{{ selectedApplication.student_branch }}</span>
+              </div>
+              <div class="col-6 small">
+                <span class="text-muted d-block">CGPA:</span>
+                <span class="fw-semibold">{{ selectedApplication.student_cgpa }}</span>
+              </div>
+              <div class="col-6 small">
+                <span class="text-muted d-block">Graduation Year:</span>
+                <span class="fw-semibold">{{ selectedApplication.student_year }}</span>
+              </div>
+              <div class="col-6 small">
+                <span class="text-muted d-block">Applied Date:</span>
+                <span class="fw-semibold">{{ new Date(selectedApplication.application_date).toLocaleDateString() }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Drive Details -->
+        <div class="col-md-6">
+          <div class="card bg-light border-0 p-3 h-100 rounded-3">
+            <h5 class="font-outfit fw-bold text-secondary mb-3">Drive Details</h5>
+            <div class="row g-3">
+              <div class="col-12 small">
+                <span class="text-muted d-block">Job Title:</span>
+                <span class="fw-semibold text-primary fs-6">{{ selectedApplication.job_title }}</span>
+              </div>
+              <div class="col-12 small">
+                <span class="text-muted d-block">Status:</span>
+                <span class="fw-semibold text-uppercase text-secondary">{{ selectedApplication.status }}</span>
+              </div>
+              <div class="col-12 small" v-if="selectedApplication.remark">
+                <span class="text-muted d-block">Remarks:</span>
+                <span class="text-secondary italic">{{ selectedApplication.remark }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Candidate Resume Section -->
+      <div class="mb-4" v-if="selectedApplication.student_resume">
+        <h5 class="font-outfit fw-bold mb-3">Candidate Resume</h5>
+        <div class="d-flex align-items-center gap-3 bg-white p-3 rounded-3 border">
+          <i class="bi bi-file-earmark-pdf-fill text-danger fs-1"></i>
+          <div>
+            <div class="fw-semibold text-dark">{{ selectedApplication.student_resume }}</div>
+            <div class="small text-muted">Uploaded PDF Document</div>
+          </div>
+          <button @click="openResume(selectedApplication.student_resume)" class="btn btn-primary btn-sm ms-auto px-3 rounded-pill">
+            <i class="bi bi-eye me-1"></i>View Resume
+          </button>
+        </div>
+      </div>
+      <div v-else class="alert alert-warning mb-4">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>No resume uploaded by this candidate.
+      </div>
+
+      <!-- Application Selection Update Form -->
+      <div class="card bg-light border-0 p-4 mb-4 rounded-3">
+        <h5 class="font-outfit fw-bold text-dark mb-3">Update Application Status</h5>
+        <form @submit.prevent="handleUpdateApplicationStatus">
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label small fw-semibold">Selection Status</label>
+              <select v-model="statusUpdateForm.status" class="form-select" required>
+                <option value="applied">Applied (Under Review)</option>
+                <option value="shortlisted">Shortlisted</option>
+                <option value="selected">Selected</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+            <div class="col-md-12 mb-3">
+              <label class="form-label small fw-semibold">Remarks / Feedback (Optional)</label>
+              <textarea v-model="statusUpdateForm.remark" class="form-control" rows="3" placeholder="Provide feedback or next steps for the candidate..."></textarea>
+            </div>
+          </div>
+          <div class="d-flex justify-content-end gap-3 pt-3 border-top">
+            <button type="button" @click="goBackToDriveDetails" class="btn btn-outline-secondary px-4 rounded-pill">Cancel</button>
+            <button type="submit" class="btn btn-success px-4 rounded-pill">Update Status</button>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -293,7 +502,7 @@ onMounted(() => {
                     </td>
                     <td>
                       <div class="btn-actions">
-                        <button @click="showDriveDetails(drive)" class="btn btn-outline-primary btn-sm rounded px-2">view details</button>
+                        <button @click="showDriveDetails(drive)" class="btn btn-outline-primary btn-sm rounded px-2">View & Review</button>
                       </div>
                     </td>
                   </tr>
@@ -318,7 +527,7 @@ onMounted(() => {
                   <h6 class="mb-0 fw-semibold">{{ drive.job_title }}</h6>
                   <div class="small text-muted">Closed: {{ new Date(drive.deadline).toLocaleDateString() }}</div>
                 </div>
-                <button class="btn btn-outline-secondary btn-sm px-2 rounded">update</button>
+                <button @click="showDriveDetails(drive)" class="btn btn-outline-secondary btn-sm px-2 rounded">View</button>
               </div>
             </div>
           </div>
