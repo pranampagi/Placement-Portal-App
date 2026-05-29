@@ -4,12 +4,19 @@ from flask import Blueprint, jsonify, request, session, current_app
 from werkzeug.utils import secure_filename
 from backend.models import db, StudentProfile, PlacementDrive, Application
 from backend.auth import login_required, roles_required
+from backend.caching import cache_response, evict_cache_by_pattern
 
 student_bp = Blueprint('student', __name__)
+
+def evict_student_related_caches():
+    evict_cache_by_pattern('admin:dashboard:*')
+    evict_cache_by_pattern('company:*')
+    evict_cache_by_pattern('student:*')
 
 @student_bp.route('/profile', methods=['GET'])
 @login_required
 @roles_required('student')
+@cache_response('student:profile', timeout=600, user_specific=True)
 def get_profile():
     student = StudentProfile.query.filter_by(user_id=session['user_id']).first_or_404()
     return jsonify({
@@ -46,6 +53,7 @@ def update_profile():
         student.cgpa = cgpa_val
         student.graduation_year = year_val
         db.session.commit()
+        evict_student_related_caches()
         return jsonify({
             "status": "success",
             "message": "Profile updated successfully.",
@@ -83,7 +91,7 @@ def upload_resume():
         
         student.resume_filename = filename
         db.session.commit()
-        
+        evict_student_related_caches()
         return jsonify({
             "status": "success",
             "message": "Resume uploaded successfully.",
@@ -96,6 +104,7 @@ def upload_resume():
 @student_bp.route('/eligible-drives', methods=['GET'])
 @login_required
 @roles_required('student')
+@cache_response('student:eligible_drives', timeout=600, user_specific=True)
 def get_eligible_drives():
     student = StudentProfile.query.filter_by(user_id=session['user_id']).first_or_404()
     
@@ -188,7 +197,7 @@ def apply_to_drive():
         )
         db.session.add(app)
         db.session.commit()
-        
+        evict_student_related_caches()
         return jsonify({
             "status": "success",
             "message": "Successfully applied to the placement drive!",
@@ -201,6 +210,7 @@ def apply_to_drive():
 @student_bp.route('/applications', methods=['GET'])
 @login_required
 @roles_required('student')
+@cache_response('student:applications', timeout=600, user_specific=True)
 def get_applications():
     student = StudentProfile.query.filter_by(user_id=session['user_id']).first_or_404()
     apps = Application.query.filter_by(student_id=student.id).order_by(Application.application_date.desc()).all()

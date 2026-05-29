@@ -1,4 +1,4 @@
-# Placement Portal Application (PPA) - V2
+# Placement Portal Application
 
 A modern, responsive, and decoupled recruitment management system for academic institutes, companies, and students. Built with a Flask REST API backend, a Vue 3 (Vite) frontend, SQLite, Redis caching, and Celery background tasks.
 

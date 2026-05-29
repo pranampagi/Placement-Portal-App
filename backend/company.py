@@ -2,8 +2,14 @@ from flask import Blueprint, jsonify, request, session
 from datetime import datetime
 from backend.models import db, User, CompanyProfile, PlacementDrive, Application
 from backend.auth import login_required, roles_required
+from backend.caching import cache_response, evict_cache_by_pattern
 
 company_bp = Blueprint('company', __name__)
+
+def evict_company_related_caches():
+    evict_cache_by_pattern('admin:dashboard:*')
+    evict_cache_by_pattern('company:*')
+    evict_cache_by_pattern('student:*')
 
 @company_bp.route('/profile', methods=['GET'])
 @login_required
@@ -18,6 +24,7 @@ def get_profile():
 @company_bp.route('/drives', methods=['GET'])
 @login_required
 @roles_required('company')
+@cache_response('company:drives', timeout=600, user_specific=True)
 def get_company_drives():
     company = CompanyProfile.query.filter_by(user_id=session['user_id']).first_or_404()
     drives = PlacementDrive.query.filter_by(company_id=company.id).all()
@@ -92,6 +99,7 @@ def create_drive():
         )
         db.session.add(drive)
         db.session.commit()
+        evict_company_related_caches()
         return jsonify({"status": "success", "message": "Placement drive created successfully. Awaiting Admin approval."}), 201
     except Exception as e:
         db.session.rollback()
@@ -115,28 +123,29 @@ def get_drive_applications(drive_id):
 def update_application_status(app_id):
     company = CompanyProfile.query.filter_by(user_id=session['user_id']).first_or_404()
     application = Application.query.get_or_404(app_id)
-    
+
     # Check if this application belongs to a drive of the current company
     if application.drive.company_id != company.id:
         return jsonify({
             "status": "error",
             "message": "Unauthorized to update this application."
         }), 403
-        
+
     data = request.get_json() or {}
     new_status = data.get('status')
     remark = data.get('remark', '')
-    
+
     if not new_status or new_status not in ['applied', 'shortlisted', 'selected', 'rejected']:
         return jsonify({
             "status": "error",
             "message": "Invalid status value. Must be 'applied', 'shortlisted', 'selected', or 'rejected'."
         }), 400
-        
+
     try:
         application.status = new_status
         application.remark = remark
         db.session.commit()
+        evict_company_related_caches()
         return jsonify({
             "status": "success",
             "message": "Application status updated successfully.",
@@ -148,4 +157,3 @@ def update_application_status(app_id):
             "status": "error",
             "message": f"Failed to update application status: {str(e)}"
         }), 500
-

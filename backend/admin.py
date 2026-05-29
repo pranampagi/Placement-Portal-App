@@ -1,12 +1,20 @@
 from flask import Blueprint, jsonify, request
 from backend.models import db, User, StudentProfile, CompanyProfile, PlacementDrive, Application
 from backend.auth import login_required, roles_required
+from backend.caching import cache_response, evict_cache_by_pattern
 
 admin_bp = Blueprint('admin', __name__)
+
+def evict_all_placement_caches():
+    # Evict everything that could change state: admin dashboard, company drives, student eligible drives, student profiles
+    evict_cache_by_pattern('admin:dashboard:*')
+    evict_cache_by_pattern('company:*')
+    evict_cache_by_pattern('student:*')
 
 @admin_bp.route('/dashboard', methods=['GET'])
 @login_required
 @roles_required('admin')
+@cache_response('admin:dashboard', timeout=600)
 def get_admin_dashboard():
     student_query = request.args.get('student_query', '').strip()
     company_query = request.args.get('company_query', '').strip()
@@ -85,6 +93,7 @@ def approve_company(company_id):
     company = CompanyProfile.query.get_or_404(company_id)
     company.approval_status = 'approved'
     db.session.commit()
+    evict_all_placement_caches()
     return jsonify({"status": "success", "message": f"Company '{company.name}' registration approved successfully."})
 
 # Reject Company Registration
@@ -95,6 +104,7 @@ def reject_company(company_id):
     company = CompanyProfile.query.get_or_404(company_id)
     company.approval_status = 'rejected'
     db.session.commit()
+    evict_all_placement_caches()
     return jsonify({"status": "success", "message": f"Company '{company.name}' registration rejected successfully."})
 
 # Toggle Company Blacklist status
@@ -117,6 +127,7 @@ def toggle_company_blacklist(company_id):
             drive.status = 'closed'
             
     db.session.commit()
+    evict_all_placement_caches()
     status_str = "blacklisted and deactivated" if company.is_blacklisted else "removed from blacklist and activated"
     return jsonify({"status": "success", "message": f"Company '{company.name}' has been {status_str}."})
 
@@ -128,6 +139,7 @@ def approve_drive(drive_id):
     drive = PlacementDrive.query.get_or_404(drive_id)
     drive.status = 'approved'
     db.session.commit()
+    evict_all_placement_caches()
     return jsonify({"status": "success", "message": f"Placement drive for '{drive.job_title}' approved successfully."})
 
 # Reject Placement Drive
@@ -138,6 +150,7 @@ def reject_drive(drive_id):
     drive = PlacementDrive.query.get_or_404(drive_id)
     drive.status = 'closed'  # Closed/Rejected
     db.session.commit()
+    evict_all_placement_caches()
     return jsonify({"status": "success", "message": f"Placement drive for '{drive.job_title}' has been closed."})
 
 # Toggle Student Active/Inactive status
@@ -153,6 +166,7 @@ def toggle_student_active(student_id):
         
     user.is_active = not user.is_active
     db.session.commit()
+    evict_all_placement_caches()
     
     status_str = "deactivated/blacklisted" if not user.is_active else "activated/restored"
     return jsonify({"status": "success", "message": f"Student '{student.name}' account has been {status_str}."})
