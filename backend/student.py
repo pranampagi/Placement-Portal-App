@@ -218,3 +218,17 @@ def get_applications():
         "status": "success",
         "applications": [a.to_dict() for a in apps]
     })
+
+# Export Student Applications to CSV
+@student_bp.route('/export-applications', methods=['POST'])
+@login_required
+@roles_required('student')
+def export_applications():
+    from backend.tasks import export_applications_csv
+    student = StudentProfile.query.filter_by(user_id=session['user_id']).first_or_404()
+    task = export_applications_csv.delay(student.id, 'student')
+    return jsonify({
+        "status": "success",
+        "task_id": task.id,
+        "message": "CSV export has been triggered in the background."
+    })

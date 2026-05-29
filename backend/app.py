@@ -50,6 +50,19 @@ def create_app():
             return jsonify({"status": "success", "admin_count": admin_count})
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)}), 500
+    @app.route('/api/tasks/<task_id>', methods=['GET'])
+    def get_task_status(task_id):
+        from backend.tasks import celery_app
+        res = celery_app.AsyncResult(task_id)
+        response_data = {
+            "status": "success",
+            "task_id": task_id,
+            "state": res.state,
+            "result": res.result if res.state == 'SUCCESS' else None
+        }
+        if res.state == 'FAILURE':
+            response_data["error"] = str(res.result)
+        return jsonify(response_data)
         
     return app
 

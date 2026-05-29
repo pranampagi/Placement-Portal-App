@@ -172,6 +172,51 @@ const openResume = (filename) => {
   window.open(url, '_blank')
 }
 
+const exportingCsv = ref(false)
+
+const handleExportCSV = async () => {
+  exportingCsv.value = true
+  errorMsg.value = ''
+  successMsg.value = ''
+  try {
+    const res = await window.axios.post('/api/student/export-applications')
+    if (res.data.status === 'success') {
+      const taskId = res.data.task_id
+      successMsg.value = 'CSV Export started in the background. Please wait...'
+      pollExportStatus(taskId)
+    }
+  } catch (err) {
+    exportingCsv.value = false
+    errorMsg.value = err.response?.data?.message || 'Failed to trigger CSV export.'
+  }
+}
+
+const pollExportStatus = (taskId) => {
+  const interval = setInterval(async () => {
+    try {
+      const res = await window.axios.get(`/api/tasks/${taskId}`)
+      if (res.data.status === 'success') {
+        const state = res.data.state
+        if (state === 'SUCCESS') {
+          clearInterval(interval)
+          exportingCsv.value = false
+          successMsg.value = 'CSV Export complete! Downloading...'
+          const downloadUrl = `${window.axios.defaults.baseURL}${res.data.result}`
+          window.open(downloadUrl, '_blank')
+        } else if (state === 'FAILURE') {
+          clearInterval(interval)
+          exportingCsv.value = false
+          errorMsg.value = res.data.error || 'CSV Export failed.'
+        }
+      }
+    } catch (err) {
+      clearInterval(interval)
+      exportingCsv.value = false
+      errorMsg.value = 'Error checking CSV export task status.'
+    }
+  }, 1000)
+}
+
 // Unified data loader based on active tab
 const loadTabData = () => {
   fetchProfile()
@@ -412,7 +457,18 @@ watch(() => props.tab, () => {
     <!-- 3. APPLICATION HISTORY VIEW -->
     <div v-else-if="tab === 'history'">
       <div class="card glass-card border-0 p-3 mb-4">
-        <h5 class="font-outfit mb-3">Application History</h5>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="font-outfit mb-0">Application History</h5>
+          <button 
+            @click="handleExportCSV" 
+            :disabled="exportingCsv || applications.length === 0" 
+            class="btn btn-outline-primary btn-sm rounded-pill px-3"
+          >
+            <span v-if="exportingCsv" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+            <i v-else class="bi bi-file-earmark-spreadsheet me-1"></i>
+            Export CSV
+          </button>
+        </div>
         
         <div v-if="applications.length === 0" class="text-muted text-center py-4 small">
           You haven't applied to any placement drives yet.

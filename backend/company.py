@@ -157,3 +157,17 @@ def update_application_status(app_id):
             "status": "error",
             "message": f"Failed to update application status: {str(e)}"
         }), 500
+
+# Export Company Applications to CSV
+@company_bp.route('/export-applications', methods=['POST'])
+@login_required
+@roles_required('company')
+def export_applications():
+    from backend.tasks import export_applications_csv
+    company = CompanyProfile.query.filter_by(user_id=session['user_id']).first_or_404()
+    task = export_applications_csv.delay(company.id, 'company')
+    return jsonify({
+        "status": "success",
+        "task_id": task.id,
+        "message": "CSV export has been triggered in the background."
+    })

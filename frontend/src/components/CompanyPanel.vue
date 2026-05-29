@@ -118,6 +118,51 @@ const openResume = (filename) => {
   window.open(url, '_blank')
 }
 
+const exportingCsv = ref(false)
+
+const handleExportCSV = async () => {
+  exportingCsv.value = true
+  errorMsg.value = ''
+  successMsg.value = ''
+  try {
+    const res = await window.axios.post('/api/company/export-applications')
+    if (res.data.status === 'success') {
+      const taskId = res.data.task_id
+      successMsg.value = 'CSV Export started in the background. Please wait...'
+      pollExportStatus(taskId)
+    }
+  } catch (err) {
+    exportingCsv.value = false
+    errorMsg.value = err.response?.data?.message || 'Failed to trigger CSV export.'
+  }
+}
+
+const pollExportStatus = (taskId) => {
+  const interval = setInterval(async () => {
+    try {
+      const res = await window.axios.get(`/api/tasks/${taskId}`)
+      if (res.data.status === 'success') {
+        const state = res.data.state
+        if (state === 'SUCCESS') {
+          clearInterval(interval)
+          exportingCsv.value = false
+          successMsg.value = 'CSV Export complete! Downloading...'
+          const downloadUrl = `${window.axios.defaults.baseURL}${res.data.result}`
+          window.open(downloadUrl, '_blank')
+        } else if (state === 'FAILURE') {
+          clearInterval(interval)
+          exportingCsv.value = false
+          errorMsg.value = res.data.error || 'CSV Export failed.'
+        }
+      }
+    } catch (err) {
+      clearInterval(interval)
+      exportingCsv.value = false
+      errorMsg.value = 'Error checking CSV export task status.'
+    }
+  }, 1000)
+}
+
 const goBackToDriveDetails = () => {
   viewMode.value = 'drive-details'
 }
@@ -277,7 +322,18 @@ onMounted(() => {
 
       <!-- Received Applications List -->
       <div class="card bg-white border-0 shadow-sm p-4 mb-4 rounded-3" v-if="selectedDrive.status === 'approved'">
-        <h5 class="fw-semibold font-outfit mb-3">Received Applications</h5>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="fw-semibold font-outfit mb-0">Received Applications</h5>
+          <button 
+            @click="handleExportCSV" 
+            :disabled="exportingCsv || driveApplications.length === 0" 
+            class="btn btn-outline-primary btn-sm rounded-pill px-3"
+          >
+            <span v-if="exportingCsv" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+            <i v-else class="bi bi-file-earmark-spreadsheet me-1"></i>
+            Export CSV
+          </button>
+        </div>
         <div v-if="driveApplications.length === 0" class="text-muted text-center py-4 small">
           No student applications received yet for this placement drive.
         </div>

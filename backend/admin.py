@@ -170,3 +170,17 @@ def toggle_student_active(student_id):
     
     status_str = "deactivated/blacklisted" if not user.is_active else "activated/restored"
     return jsonify({"status": "success", "message": f"Student '{student.name}' account has been {status_str}."})
+
+# Export Applications to CSV
+@admin_bp.route('/export-applications', methods=['POST'])
+@login_required
+@roles_required('admin')
+def export_applications():
+    from backend.tasks import export_applications_csv
+    from flask import session
+    task = export_applications_csv.delay(session['user_id'], 'admin')
+    return jsonify({
+        "status": "success",
+        "task_id": task.id,
+        "message": "CSV export has been triggered in the background."
+    })
