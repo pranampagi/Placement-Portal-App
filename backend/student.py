@@ -232,3 +232,97 @@ def export_applications():
         "task_id": task.id,
         "message": "CSV export has been triggered in the background."
     })
+
+# Helper function to format keywords nicely
+def format_keyword(kw):
+    mapping = {
+        "c++": "C++",
+        "c#": "C#",
+        "sql": "SQL",
+        "html": "HTML",
+        "css": "CSS",
+        "aws": "AWS",
+        "rest api": "REST API",
+        "ci/cd": "CI/CD",
+        "js": "JavaScript",
+        "javascript": "JavaScript",
+        "mongodb": "MongoDB",
+        "postgresql": "PostgreSQL",
+        "graphql": "GraphQL"
+    }
+    return mapping.get(kw.lower(), kw.title())
+
+# ATS Resume Matcher Endpoint
+@student_bp.route('/drives/<int:drive_id>/ats-match', methods=['POST'])
+@login_required
+@roles_required('student')
+def ats_match(drive_id):
+    student = StudentProfile.query.filter_by(user_id=session['user_id']).first_or_404()
+    
+    if not student.resume_filename:
+        return jsonify({
+            "status": "error",
+            "message": "No resume found. Please upload a PDF resume in 'Edit Profile' first."
+        }), 400
+        
+    drive = PlacementDrive.query.get_or_404(drive_id)
+    
+    # Predefined keyword pool
+    KEYWORD_POOL = [
+        "python", "vue", "javascript", "sql", "git", "docker", "flask", "java", "react", 
+        "c++", "c#", "html", "css", "django", "node", "mongodb", "postgresql", "aws", 
+        "kubernetes", "typescript", "machine learning", "data science", "angular", "spring", 
+        "rust", "go", "php", "ruby", "swift", "kotlin", "linux", "devops", "ci/cd", 
+        "rest api", "graphql"
+    ]
+    
+    # Scan job description and title for keywords
+    job_text = f"{drive.job_title} {drive.job_description}".lower()
+    keywords = [kw for kw in KEYWORD_POOL if kw in job_text]
+    
+    # Fallback if no keywords found in job description
+    if not keywords:
+        keywords = ["python", "javascript", "sql", "git", "html", "css"]
+        
+    # Read PDF binary content
+    upload_dir = current_app.config['UPLOAD_FOLDER']
+    pdf_path = os.path.join(upload_dir, student.resume_filename)
+    
+    if not os.path.exists(pdf_path):
+        return jsonify({
+            "status": "error",
+            "message": "Resume file does not exist on disk. Please re-upload your resume."
+        }), 404
+        
+    try:
+        with open(pdf_path, 'rb') as f:
+            pdf_bytes = f.read().lower()
+            
+        matched_skills = []
+        missing_skills = []
+        
+        for kw in keywords:
+            # Look for byte sequence of keyword in the pdf binary content
+            if kw.encode('utf-8') in pdf_bytes:
+                matched_skills.append(format_keyword(kw))
+            else:
+                missing_skills.append(format_keyword(kw))
+                
+        # Handle case where keywords is empty just in case
+        if keywords:
+            score = int((len(matched_skills) / len(keywords)) * 100)
+        else:
+            score = 0
+            
+        return jsonify({
+            "status": "success",
+            "score": score,
+            "matched_skills": matched_skills,
+            "missing_skills": missing_skills
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to parse resume: {str(e)}"
+        }), 500
+

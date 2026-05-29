@@ -217,6 +217,62 @@ const pollExportStatus = (taskId) => {
   }, 1000)
 }
 
+// ATS Matcher States & Functions
+const atsModalOpen = ref(false)
+const selectedDriveForAts = ref(null)
+const atsLoading = ref(false)
+const atsResult = ref(null)
+
+const openAtsChecker = async (drive) => {
+  selectedDriveForAts.value = drive
+  atsModalOpen.value = true
+  atsLoading.value = true
+  atsResult.value = null
+  errorMsg.value = ''
+  
+  try {
+    const res = await window.axios.post(`/api/student/drives/${drive.id}/ats-match`)
+    if (res.data.status === 'success') {
+      atsResult.value = {
+        score: res.data.score,
+        matched_skills: res.data.matched_skills,
+        missing_skills: res.data.missing_skills
+      }
+    }
+  } catch (err) {
+    errorMsg.value = err.response?.data?.message || 'Failed to analyze resume compatibility.'
+    atsModalOpen.value = false
+  } finally {
+    atsLoading.value = false
+  }
+}
+
+const closeAtsChecker = () => {
+  atsModalOpen.value = false
+  selectedDriveForAts.value = null
+  atsResult.value = null
+}
+
+const getScoreCircleStyle = (score) => {
+  let color = '#ef4444' // Red if low
+  if (score >= 70) {
+    color = '#10b981' // Green if high
+  } else if (score >= 40) {
+    color = '#f59e0b' // Amber if mid
+  }
+  return {
+    '--score-percent': score,
+    '--score-color': color
+  }
+}
+
+const getScoreFeedback = (score) => {
+  if (score >= 80) return 'Excellent Match!'
+  if (score >= 60) return 'Good Compatibility'
+  if (score >= 40) return 'Moderate Match'
+  return 'Requires Alignment'
+}
+
 // Unified data loader based on active tab
 const loadTabData = () => {
   fetchProfile()
@@ -350,18 +406,29 @@ watch(() => props.tab, () => {
                 <td>{{ drive.location }}</td>
                 <td>{{ new Date(drive.deadline).toLocaleString() }}</td>
                 <td>
-                  <span v-if="drive.applied" :class="'badge badge-' + drive.application_status + ' text-uppercase px-2 py-1'">
-                    {{ drive.application_status }}
-                  </span>
-                  <button 
-                    v-else 
-                    @click="handleApply(drive.id)" 
-                    :disabled="!studentProfile.resume_filename"
-                    class="btn btn-primary btn-sm rounded px-3 py-1"
-                    :title="!studentProfile.resume_filename ? 'Please upload your resume in the Profile tab to apply.' : ''"
-                  >
-                    Apply Now
-                  </button>
+                  <div class="d-flex align-items-center gap-2">
+                    <button 
+                      @click="openAtsChecker(drive)"
+                      :disabled="!studentProfile.resume_filename"
+                      class="btn btn-outline-info btn-sm rounded px-2 py-1 text-dark"
+                      style="border-color: #0dcaf0;"
+                    >
+                      <i class="bi bi-cpu me-1"></i>ATS Check
+                    </button>
+                    
+                    <span v-if="drive.applied" :class="'badge badge-' + drive.application_status + ' text-uppercase px-2 py-1'">
+                      {{ drive.application_status }}
+                    </span>
+                    <button 
+                      v-else 
+                      @click="handleApply(drive.id)" 
+                      :disabled="!studentProfile.resume_filename"
+                      class="btn btn-primary btn-sm rounded px-3 py-1"
+                      :title="!studentProfile.resume_filename ? 'Please upload your resume in the Profile tab to apply.' : ''"
+                    >
+                      Apply Now
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -504,6 +571,77 @@ watch(() => props.tab, () => {
         </div>
       </div>
     </div>
+
+    <!-- ATS Matcher Modal (Glassmorphic) -->
+    <div v-if="atsModalOpen && selectedDriveForAts" class="modal-backdrop-custom fade-in-el" @click.self="closeAtsChecker">
+      <div class="modal-content-custom glass-card p-4">
+        <div class="d-flex justify-content-between align-items-start mb-3 border-bottom pb-2">
+          <div>
+            <span class="badge bg-info text-dark text-uppercase mb-1">ATS Scanner</span>
+            <h4 class="font-outfit text-dark mb-0">{{ selectedDriveForAts.job_title }}</h4>
+            <p class="text-muted small mb-0">{{ selectedDriveForAts.company_name }}</p>
+          </div>
+          <button type="button" @click="closeAtsChecker" class="btn-close" aria-label="Close"></button>
+        </div>
+        
+        <div v-if="atsLoading" class="text-center py-5">
+          <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <p class="text-secondary mt-3 mb-0">Analyzing resume content against job description...</p>
+        </div>
+        
+        <div v-else-if="atsResult" class="modal-body-custom">
+          <!-- Circular compatibility score -->
+          <div class="d-flex flex-column align-items-center mb-4 text-center">
+            <div class="score-circle-wrapper mb-2" :style="getScoreCircleStyle(atsResult.score)">
+              <div class="score-inner">
+                <span class="score-number font-outfit">{{ atsResult.score }}%</span>
+                <span class="score-label text-uppercase">Match Score</span>
+              </div>
+            </div>
+            <div class="fw-semibold text-dark">{{ getScoreFeedback(atsResult.score) }}</div>
+          </div>
+          
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="card bg-success-light border-0 p-3 h-100 rounded-3">
+                <h6 class="fw-bold text-success mb-2"><i class="bi bi-check-circle-fill me-1"></i>Matched Skills</h6>
+                <div v-if="atsResult.matched_skills.length === 0" class="text-muted small">
+                  No overlapping skills matched.
+                </div>
+                <div v-else class="d-flex flex-wrap gap-1 mt-2">
+                  <span v-for="skill in atsResult.matched_skills" :key="skill" class="badge bg-success-badge text-success px-2 py-1">
+                    {{ skill }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-6">
+              <div class="card bg-danger-light border-0 p-3 h-100 rounded-3">
+                <h6 class="fw-bold text-danger mb-2"><i class="bi bi-exclamation-triangle-fill me-1"></i>Missing Skills</h6>
+                <div v-if="atsResult.missing_skills.length === 0" class="text-muted small">
+                  Perfect match! No missing skills found.
+                </div>
+                <div v-else class="d-flex flex-wrap gap-1 mt-2">
+                  <span v-for="skill in atsResult.missing_skills" :key="skill" class="badge bg-danger-badge text-danger px-2 py-1">
+                    {{ skill }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="mt-4 pt-3 border-top text-center">
+            <p class="text-secondary small mb-0">
+              <i class="bi bi-info-circle me-1"></i>
+              Tip: Incorporate missing keywords into your resume to improve your ATS match rate.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -515,5 +653,99 @@ watch(() => props.tab, () => {
 .upload-dropzone:hover {
   border-color: var(--primary-color) !important;
   background-color: #f1f5f9 !important;
+}
+
+/* Custom Modal Backdrop with blur */
+.modal-backdrop-custom {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1050;
+  padding: 1rem;
+}
+
+/* Modal Content Card */
+.modal-content-custom {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  border-radius: 1.25rem;
+  max-width: 550px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Circular Score Circle styling */
+.score-circle-wrapper {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  background: conic-gradient(var(--score-color, #3b82f6) calc(var(--score-percent, 0) * 1%), #e2e8f0 0);
+  transition: all 0.5s ease-in-out;
+}
+.score-inner {
+  width: 104px;
+  height: 104px;
+  background: white;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.06);
+}
+.score-number {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #1e293b;
+  line-height: 1;
+}
+.score-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}
+
+/* Customized colors for match boxes */
+.bg-success-light {
+  background-color: #f0fdf4 !important;
+}
+.bg-success-badge {
+  background-color: #dcfce7 !important;
+  color: #166534 !important;
+}
+.bg-danger-light {
+  background-color: #fef2f2 !important;
+}
+.bg-danger-badge {
+  background-color: #fee2e2 !important;
+  color: #991b1b !important;
 }
 </style>

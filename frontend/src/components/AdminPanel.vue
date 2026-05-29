@@ -1,5 +1,8 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
+import { Chart, registerables } from 'chart.js'
+
+Chart.register(...registerables)
 
 const props = defineProps({
   user: {
@@ -33,6 +36,85 @@ const companySearch = ref('')
 const errorMsg = ref('')
 const successMsg = ref('')
 
+// ChartJS refs
+const chartCanvas = ref(null)
+let chartInstance = null
+
+const renderChart = () => {
+  if (!chartCanvas.value) return
+  
+  const counts = {
+    applied: 0,
+    shortlisted: 0,
+    selected: 0,
+    rejected: 0
+  }
+  
+  studentApplications.value.forEach(app => {
+    const status = app.status ? app.status.toLowerCase() : 'applied'
+    if (counts[status] !== undefined) {
+      counts[status]++
+    } else {
+      counts.applied++
+    }
+  })
+  
+  const ctx = chartCanvas.value.getContext('2d')
+  if (chartInstance) {
+    chartInstance.destroy()
+  }
+  
+  chartInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Applied', 'Shortlisted', 'Selected', 'Rejected'],
+      datasets: [{
+        data: [counts.applied, counts.shortlisted, counts.selected, counts.rejected],
+        backgroundColor: [
+          'rgba(54, 162, 235, 0.75)',  // Blue
+          'rgba(255, 193, 7, 0.75)',   // Amber/Yellow
+          'rgba(40, 167, 69, 0.75)',   // Green
+          'rgba(220, 53, 69, 0.75)'    // Red
+        ],
+        borderColor: [
+          '#36a2eb',
+          '#ffc107',
+          '#28a745',
+          '#dc3569'
+        ],
+        borderWidth: 1.5
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            font: {
+              family: 'Outfit',
+              size: 11
+            },
+            color: '#333'
+          }
+        },
+        title: {
+          display: true,
+          text: 'Applications Status Breakdown',
+          font: {
+            family: 'Outfit',
+            size: 14,
+            weight: 'bold'
+          },
+          color: '#333'
+        }
+      },
+      cutout: '70%'
+    }
+  })
+}
+
 const fetchDashboardData = async () => {
   try {
     const res = await window.axios.get('/api/admin/dashboard', {
@@ -49,11 +131,15 @@ const fetchDashboardData = async () => {
       pendingDrives.value = res.data.pending_drives
       ongoingDrives.value = res.data.ongoing_drives
       studentApplications.value = res.data.student_applications
+      
+      await nextTick()
+      renderChart()
     }
   } catch (err) {
     errorMsg.value = err.response?.data?.message || 'Failed to fetch dashboard data.'
   }
 }
+
 
 // Action Handlers
 const handleApproveCompany = async (id) => {
@@ -353,27 +439,38 @@ onMounted(() => {
 
     <!-- 3. MAIN DASHBOARD VIEW -->
     <div v-else>
-      <!-- Statistics Cards -->
-      <div class="row g-3 mb-4">
-        <div class="col-md-4">
-          <div class="card glass-card p-3 text-center border-0">
-            <i class="bi bi-people text-primary fs-2"></i>
-            <h6 class="text-uppercase text-secondary small fw-bold mt-2">Registered Students</h6>
-            <h2 class="font-outfit text-dark mb-0 mt-1">{{ stats.total_students }}</h2>
+      <!-- Statistics Cards & Chart -->
+      <div class="row g-4 mb-4">
+        <div class="col-lg-8">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="card glass-card p-4 text-center border-0 h-100 d-flex flex-column justify-content-center">
+                <i class="bi bi-people text-primary fs-1"></i>
+                <h6 class="text-uppercase text-secondary small fw-bold mt-2">Registered Students</h6>
+                <h2 class="font-outfit text-dark mb-0 mt-1">{{ stats.total_students }}</h2>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="card glass-card p-4 text-center border-0 h-100 d-flex flex-column justify-content-center">
+                <i class="bi bi-building text-success fs-1"></i>
+                <h6 class="text-uppercase text-secondary small fw-bold mt-2">Registered Companies</h6>
+                <h2 class="font-outfit text-dark mb-0 mt-1">{{ stats.total_companies }}</h2>
+              </div>
+            </div>
+            <div class="col-md-12">
+              <div class="card glass-card p-4 text-center border-0 h-100 d-flex flex-column justify-content-center">
+                <i class="bi bi-calendar-event text-info fs-1"></i>
+                <h6 class="text-uppercase text-secondary small fw-bold mt-2">Placement Drives</h6>
+                <h2 class="font-outfit text-dark mb-0 mt-1">{{ stats.total_drives }}</h2>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="col-md-4">
-          <div class="card glass-card p-3 text-center border-0">
-            <i class="bi bi-building text-success fs-2"></i>
-            <h6 class="text-uppercase text-secondary small fw-bold mt-2">Registered Companies</h6>
-            <h2 class="font-outfit text-dark mb-0 mt-1">{{ stats.total_companies }}</h2>
-          </div>
-        </div>
-        <div class="col-md-4">
-          <div class="card glass-card p-3 text-center border-0">
-            <i class="bi bi-calendar-event text-info fs-2"></i>
-            <h6 class="text-uppercase text-secondary small fw-bold mt-2">Placement Drives</h6>
-            <h2 class="font-outfit text-dark mb-0 mt-1">{{ stats.total_drives }}</h2>
+        <div class="col-lg-4">
+          <div class="card glass-card border-0 p-3 h-100 d-flex flex-column justify-content-center align-items-center">
+            <div style="position: relative; height: 200px; width: 100%;">
+              <canvas ref="chartCanvas"></canvas>
+            </div>
           </div>
         </div>
       </div>
